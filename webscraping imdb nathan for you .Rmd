@@ -1,0 +1,75 @@
+---
+title: "Scraping data about 'Nathan For You' from IMDB"
+output: html_notebook
+---
+
+```{r include=FALSE}
+library(rvest)
+library(tidyverse)
+library(magrittr)
+library(scales)
+library(knitr)
+library(lubridate)
+```
+
+```{r}
+url <- "https://www.imdb.com/title/tt2297757/episodes?season="
+season_values <- 1:4
+
+unitedata <- function(x){
+  full_url <- paste0(url,x)
+  full_url
+}
+
+finalurl <- unitedata(season_values) # pastes each season to the url we are building
+finalurl
+```
+
+```{r}
+imdbScrape <- function(x) {
+  page <- x 
+  name <- page %>% read_html() %>% html_nodes('#episodes_content strong a') %>% html_text() %>% as.data.frame()
+  rating <- page %>% read_html() %>% html_nodes('.ipl-rating-widget > .ipl-rating-star .ipl-rating-star__rating') %>% html_text() %>% as.data.frame()
+  details <- page %>% read_html() %>% html_nodes('.zero-z-index div') %>% html_text() %>% as.data.frame()
+    
+  chart <- cbind(name, rating, details)
+  names(chart) <- c("Name", "Rating", "Details")
+  chart <- as.tibble(chart)
+  return(chart)
+  Sys.sleep(5)
+}
+
+# creates a loop applying imdbScrape to each finalurl
+Nathan <- map_dfr(finalurl,imdbScrape)
+```
+
+```{r}
+Nathan$Season <- str_extract(Nathan$Details, "S[0-9]+")
+Nathan$Season <- as.numeric(str_extract(Nathan$Season, "[0-9]+"))
+
+Nathan$Episode <- str_extract(Nathan$Details, "Ep[0-9]+")
+Nathan$Episode <- as.numeric(str_extract(Nathan$Episode, "[0-9]+"))
+
+Nathan$Rating <- as.numeric(Nathan$Rating)
+
+Nathan$Details <- NULL
+```
+
+```{r}
+Nathan %>% group_by(Season) %>% summarise(Rating=mean(Rating)) %>%
+  ggplot() + geom_line(aes(x=Season, y=Rating), color='Blue', size=1.5) +  #creates the skeleton and axis
+  theme_classic() +
+  labs(title="The Ratings of Nathan For You",
+       subtitle="Average Episode Ratings by Season",
+       caption="Source: IMDB, August 2018",
+       x="Season",
+       y="Rating") + 
+  theme(plot.title = element_text(family='', face = 'bold', colour = 'black', size = 20),
+        plot.subtitle = element_text(family='', face = 'italic', colour = 'black', size = 10),
+        plot.caption = element_text(family='', colour = 'black', size = 10),
+        axis.title.x = element_text(family='', face = 'bold', colour = 'black', size = 12),
+        axis.title.y = element_text(family='', colour = 'black', size = 12))
+  
+
+```
+
